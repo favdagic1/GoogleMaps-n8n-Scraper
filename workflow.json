@@ -1,0 +1,658 @@
+{
+  "name": "My workflow 3",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "={{ $json.website }}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "redirect": {
+            "redirect": {
+              "maxRedirects": 20
+            }
+          },
+          "response": {
+            "response": {}
+          },
+          "timeout": 10000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        816,
+        -160
+      ],
+      "id": "adda7dbe-e7fc-44ff-af21-8cffbeb732e2",
+      "name": "web scraping",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "http://127.0.0.1:8001/scrape-get",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $('forma').item.json.kategorija }} {{ $('Basic LLM Chain').item.json.text }}"
+            },
+            {
+              "name": "max_places",
+              "value": "={{ $('forma').item.json['broj objekata'] }}"
+            },
+            {
+              "name": "headless",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "maxRedirects": 10
+            }
+          },
+          "response": {
+            "response": {}
+          },
+          "timeout": 100000000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        192,
+        -48
+      ],
+      "id": "4ccf0fcd-ffc6-48ef-862f-418984ca1978",
+      "name": "google maps scraping",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "8af21b9f-817b-442c-bb78-5d3c1f2828bc",
+              "leftValue": "={{ $json.website }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        352,
+        -48
+      ],
+      "id": "fb729610-7c54-448f-8f83-2c752d8e222b",
+      "name": "if-1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "1f633aa6-8472-492c-a694-92467f6075a4",
+              "leftValue": "={{ $json.website }}",
+              "rightValue": "Greška pri učitavanju",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "7d44f33b-a634-415c-81e5-df4a2909bce8",
+              "leftValue": "={{ $json.website }}",
+              "rightValue": "Potreban pristup",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "d1c5864d-2f77-46f0-84af-3a7bbfd98cbf",
+              "leftValue": "={{ $json.website }}",
+              "rightValue": "Timeout",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        544,
+        -240
+      ],
+      "id": "25c3f85e-1c88-43b3-b9f9-a0e4560a0640",
+      "name": "if-2"
+    },
+    {
+      "parameters": {
+        "formTitle": "skripta",
+        "formDescription": "napisi grad i kategoriju",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "grad"
+            },
+            {
+              "fieldLabel": "kategorija"
+            },
+            {
+              "fieldLabel": "broj objekata"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.3,
+      "position": [
+        -752,
+        -48
+      ],
+      "id": "14107abe-515c-4117-85c0-81729170d344",
+      "name": "forma",
+      "webhookId": "YOUR_WEBHOOK_ID"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Uzmi scrapeovane stranice\nconst items = $input.all();\nconst enrichedData = [];\n\n// Helper funkcija: Izvuci META tag vrednost\nfunction getMetaContent(html, property) {\n  const patterns = [\n    new RegExp(`<meta[^>]*property=[\"']${property}[\"'][^>]*content=[\"']([^\"']+)[\"']`, 'i'),\n    new RegExp(`<meta[^>]*content=[\"']([^\"']+)[\"'][^>]*property=[\"']${property}[\"']`, 'i'),\n    new RegExp(`<meta[^>]*name=[\"']${property}[\"'][^>]*content=[\"']([^\"']+)[\"']`, 'i')\n  ];\n\n  for (let pattern of patterns) {\n    const match = html.match(pattern);\n    if (match && match[1]) return match[1];\n  }\n  return null;\n}\n\n// Helper funkcija: Izvuci JSON-LD podatke (schema.org)\nfunction getJsonLdData(html, type = 'Hotel') {\n  const jsonLdRegex = /<script type=\"application\\/ld\\+json\">([\\s\\S]*?)<\\/script>/gi;\n  const matches = [...html.matchAll(jsonLdRegex)];\n\n  for (let match of matches) {\n    try {\n      const data = JSON.parse(match[1]);\n      if (data['@type'] === type) {\n        return data;\n      }\n    } catch (e) {\n      // Ignoriši parsing greške\n    }\n  }\n  return null;\n}\n\n// Helper: Validacija email-a\nfunction isValidBusinessEmail(email) {\n  if (!email) return false;\n\n  const lowerEmail = email.toLowerCase();\n\n  // Spam keywords\n  const invalidKeywords = [\n    'sentry.io', 'example.com', 'wixpress.com', 'cloudflare.com',\n    'noreply', 'no-reply', 'mailer', 'daemon', 'postmaster',\n    'abuse', 'spam', 'privacy', 'gdpr', 'legal', 'support',\n    'facebook.com', 'instagram.com', 'twitter.com', 'linkedin.com',\n    'cdn.', 'static.', 'assets.', 'api.', 'analytics', 'tracking',\n    'google', 'microsoft', 'apple', 'amazonaws'\n  ];\n\n  return !invalidKeywords.some(keyword => lowerEmail.includes(keyword));\n}\n\n// Helper: Validacija social URL-a\nfunction isValidSocialUrl(url, platform) {\n  if (!url) return false;\n\n  const lowerUrl = url.toLowerCase();\n\n  // Invalidan paths (share buttons, login pages, etc)\n  const invalidPaths = [\n    '/security', '/login', '/privacy', '/terms', '/help',\n    '/support', '/legal', '/policies', '/sharer', '/dialog',\n    '/share.php', '/plugins', '/widgets', '/intent', '/authenticate'\n  ];\n\n  if (invalidPaths.some(path => lowerUrl.includes(path))) {\n    return false;\n  }\n\n  // Dodatna validacija za svaki platform\n  if (platform === 'facebook') {\n    // Prihvati samo direct profile/page linkove\n    return /facebook\\.com\\/[a-zA-Z0-9.]+\\/?$/.test(lowerUrl);\n  }\n\n  if (platform === 'instagram') {\n    // Prihvati samo direct profile linkove\n    return /instagram\\.com\\/[a-zA-Z0-9_.]+\\/?$/.test(lowerUrl);\n  }\n\n  return true;\n}\n\n// Helper: Format URL\nfunction formatUrl(url) {\n  if (!url) return '';\n  if (url.startsWith('http')) return url;\n  return 'https://' + url;\n}\n\n// ============================================================\n// GLAVNA LOGIKA\n// ============================================================\n\nfor (let item of items) {\n  // HTML sadržaj sa web stranice\n  const html = (item.json.body || item.json.data || item.json || '').toString();\n\n  // Originalni podaci sa Google Maps Scraper-a\n  const originalIndex = items.indexOf(item);\n  const originalData = $('google maps scraping').all()[originalIndex].json;\n\n  // ============================================================\n  // 1. ADRESA - Parsiraj univerzalno\n  // ============================================================\n  const fullAddress = originalData.address || '';\n  let ulica = '';\n  let grad = '';\n  let postanskiBroj = '';\n  let drzava = '';\n\n  if (originalData.country) {\n    drzava = originalData.country;\n  }\n\n  const addressParts = fullAddress.split(',').map(part => part.trim());\n\n  if (addressParts.length >= 2) {\n    ulica = addressParts[0];\n\n    if (addressParts.length === 2) {\n      const gradMatch = addressParts[1].match(/^(.+?)\\s*(\\d{4,6})?$/);\n      if (gradMatch) {\n        grad = gradMatch[1].trim();\n        postanskiBroj = gradMatch[2] || '';\n      }\n    } else if (addressParts.length === 3) {\n      grad = addressParts[1];\n      if (!drzava) drzava = addressParts[2];\n    } else if (addressParts.length >= 4) {\n      grad = addressParts[1];\n      if (!drzava) drzava = addressParts[addressParts.length - 1];\n    }\n  }\n\n  if (!drzava) drzava = 'Nepoznato';\n\n  // ============================================================\n  // 2. EMAIL - PRIORITET: META -> JSON-LD -> REGEX\n  // ============================================================\n  let finalEmail = '';\n\n  // 2.1 Pokušaj META tagove (najsigurnije!)\n  const metaEmail = getMetaContent(html, 'og:email');\n  if (metaEmail && isValidBusinessEmail(metaEmail)) {\n    finalEmail = metaEmail;\n  }\n\n  // 2.2 Pokušaj JSON-LD (schema.org)\n  if (!finalEmail) {\n    const jsonLd = getJsonLdData(html, 'Hotel') || getJsonLdData(html, 'Restaurant') || getJsonLdData(html, 'LocalBusiness');\n    if (jsonLd && jsonLd.email && isValidBusinessEmail(jsonLd.email)) {\n      finalEmail = jsonLd.email;\n    }\n  }\n\n  // 2.3 Fallback: Regex (samo validni email-ovi)\n  if (!finalEmail) {\n    const emailRegex = /\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b/gi;\n    const emails = [...html.matchAll(emailRegex)].map(m => m[0]);\n\n    // Filtriraj i uzmi PRVI validan\n    finalEmail = emails.find(e => isValidBusinessEmail(e)) || '';\n  }\n\n  finalEmail = finalEmail || 'Nije pronađeno';\n\n  // ============================================================\n  // 3. TELEFON - Iz META ili originalData\n  // ============================================================\n  let telefon = originalData.phone || '';\n\n  // Pokušaj iz META ako nema u originalData\n  if (!telefon) {\n    const metaPhone = getMetaContent(html, 'og:phone_number');\n    if (metaPhone) telefon = metaPhone;\n  }\n\n  // Format telefona\n  if (telefon) {\n    telefon = telefon.replace(/[^\\d+]/g, '');\n\n    if (telefon.startsWith('00')) {\n      telefon = '+' + telefon.substring(2);\n    }\n\n    if (!telefon.startsWith('+') && telefon.startsWith('0')) {\n      if (drzava === 'BiH' || drzava.includes('Bosnia')) {\n        telefon = '+387' + telefon.substring(1);\n      }\n    }\n\n    if (telefon.startsWith('+387')) {\n      telefon = telefon.replace(/(\\+387)(\\d{2})(\\d{3})(\\d{3,4})/, '$1 $2 $3 $4');\n    }\n  }\n\n  telefon = telefon || 'Nije pronađeno';\n\n  // ============================================================\n  // 4. SOCIAL MEDIA - PRIORITET: META -> JSON-LD -> REGEX\n  // ============================================================\n  let finalFacebook = '';\n  let finalInstagram = '';\n  let finalLinkedIn = '';\n\n  // 4.1 Pokušaj META tagove\n  const metaFacebook = getMetaContent(html, 'og:see_also') || getMetaContent(html, 'facebook:page_id');\n  const metaInstagram = getMetaContent(html, 'instagram:url');\n\n  if (metaFacebook && metaFacebook.includes('facebook.com') && isValidSocialUrl(metaFacebook, 'facebook')) {\n    finalFacebook = formatUrl(metaFacebook);\n  }\n\n  if (metaInstagram && metaInstagram.includes('instagram.com') && isValidSocialUrl(metaInstagram, 'instagram')) {\n    finalInstagram = formatUrl(metaInstagram);\n  }\n\n  // 4.2 Pokušaj JSON-LD\n  if (!finalFacebook || !finalInstagram) {\n    const jsonLd = getJsonLdData(html);\n    if (jsonLd && jsonLd.sameAs) {\n      const sameAs = Array.isArray(jsonLd.sameAs) ? jsonLd.sameAs : [jsonLd.sameAs];\n\n      if (!finalFacebook) {\n        const fbUrl = sameAs.find(url => url.includes('facebook.com'));\n        if (fbUrl && isValidSocialUrl(fbUrl, 'facebook')) {\n          finalFacebook = formatUrl(fbUrl);\n        }\n      }\n\n      if (!finalInstagram) {\n        const igUrl = sameAs.find(url => url.includes('instagram.com'));\n        if (igUrl && isValidSocialUrl(igUrl, 'instagram')) {\n          finalInstagram = formatUrl(igUrl);\n        }\n      }\n\n      if (!finalLinkedIn) {\n        const liUrl = sameAs.find(url => url.includes('linkedin.com'));\n        if (liUrl && isValidSocialUrl(liUrl, 'linkedin')) {\n          finalLinkedIn = formatUrl(liUrl);\n        }\n      }\n    }\n  }\n\n  // 4.3 Fallback: Regex (samo validni linkovi)\n  if (!finalFacebook || !finalInstagram || !finalLinkedIn) {\n    const instagramRegex = /(?:https?:\\/\\/)?(?:www\\.)?instagram\\.com\\/([a-zA-Z0-9_.]+)/gi;\n    const facebookRegex = /(?:https?:\\/\\/)?(?:www\\.|m\\.)?facebook\\.com\\/([a-zA-Z0-9.]+)/gi;\n    const linkedinRegex = /(?:https?:\\/\\/)?(?:www\\.)?linkedin\\.com\\/(?:company|in)\\/([a-zA-Z0-9-]+)/gi;\n\n    const instagrams = [...html.matchAll(instagramRegex)].map(m => m[0]);\n    const facebooks = [...html.matchAll(facebookRegex)].map(m => m[0]);\n    const linkedins = [...html.matchAll(linkedinRegex)].map(m => m[0]);\n\n    if (!finalInstagram) {\n      finalInstagram = instagrams.find(url => isValidSocialUrl(url, 'instagram')) || '';\n      if (finalInstagram) finalInstagram = formatUrl(finalInstagram);\n    }\n\n    if (!finalFacebook) {\n      finalFacebook = facebooks.find(url => isValidSocialUrl(url, 'facebook')) || '';\n      if (finalFacebook) finalFacebook = formatUrl(finalFacebook);\n    }\n\n    if (!finalLinkedIn) {\n      finalLinkedIn = linkedins.find(url => isValidSocialUrl(url, 'linkedin')) || '';\n      if (finalLinkedIn) finalLinkedIn = formatUrl(finalLinkedIn);\n    }\n  }\n\n  // 4.4 Provjeri website kao fallback\n  const websiteUrl = originalData.website || '';\n\n  if (!finalFacebook && websiteUrl.includes('facebook.com') && isValidSocialUrl(websiteUrl, 'facebook')) {\n    finalFacebook = websiteUrl;\n  }\n\n  if (!finalInstagram && websiteUrl.includes('instagram.com') && isValidSocialUrl(websiteUrl, 'instagram')) {\n    finalInstagram = websiteUrl;\n  }\n\n  // Defaults\n  finalFacebook = finalFacebook || 'Nije pronađeno';\n  finalInstagram = finalInstagram || 'Nije pronađeno';\n  finalLinkedIn = finalLinkedIn || 'Nije pronađeno';\n\n  // ============================================================\n  // 5. OSTALI PODACI\n  // ============================================================\n  const kategorija = (originalData.categories && originalData.categories[0]) ? originalData.categories[0] : '';\n\n  enrichedData.push({\n    json: {\n      ime: originalData.name || '',\n      drzava: drzava,\n      grad: grad || 'Nepoznato',\n      adresa: ulica || fullAddress,\n      postanskiBroj: postanskiBroj || '',\n      email: finalEmail,\n      telefon: telefon,\n      web: (websiteUrl && !websiteUrl.includes('facebook.com') && !websiteUrl.includes('instagram.com')) ? websiteUrl : 'Nije pronađeno',\n      ocjena: originalData.rating ? String(originalData.rating) : 'Nema ocjene',\n      recenzije: originalData.reviews_count ? String(originalData.reviews_count) : '0',\n      facebook: finalFacebook,\n      instagram: finalInstagram,\n      linkedin: finalLinkedIn,\n      mapsLink: originalData.link || '',\n      kategorija: kategorija\n    }\n  });\n}\n\nreturn enrichedData;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1024,
+        -336
+      ],
+      "id": "f4bf2803-37fe-4756-90d4-44a000d67c2e",
+      "name": "analiza podataka"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEETS_DOCUMENT_ID",
+          "mode": "list",
+          "cachedResultName": "Automatizacija",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEETS_DOCUMENT_ID/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "List 1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEETS_DOCUMENT_ID/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Ime firme": "={{ $json.ime }}",
+            "Država": "={{ $json.drzava }}",
+            "Grad": "={{ $json.grad }}",
+            "Adresa": "={{ $json.adresa }}",
+            "Email": "={{ $json.email }}",
+            "Broj telefona": "={{ $json.telefon }}",
+            "Web stranica": "={{ $json.web }}",
+            "Ocjena": "={{ $json.ocjena }}",
+            "Recenzije": "={{ $json.recenzije }}",
+            "Facebook": "={{ $json.facebook }}",
+            "Instagram": "={{ $json.instagram }}",
+            "LinkedIn": "={{ $json.linkedin }}",
+            "G-Maps link": "={{ $json.mapsLink }}",
+            "Kategorija": "={{ $('forma').item.json.kategorija }}"
+          },
+          "matchingColumns": [
+            "Ime firme"
+          ],
+          "schema": [
+            {
+              "id": "Ime firme",
+              "displayName": "Ime firme",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Država",
+              "displayName": "Država",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Grad",
+              "displayName": "Grad",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Adresa",
+              "displayName": "Adresa",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Broj telefona",
+              "displayName": "Broj telefona",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Web stranica",
+              "displayName": "Web stranica",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Ocjena",
+              "displayName": "Ocjena",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Recenzije",
+              "displayName": "Recenzije",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Facebook",
+              "displayName": "Facebook",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Instagram",
+              "displayName": "Instagram",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "LinkedIn",
+              "displayName": "LinkedIn",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "G-Maps link",
+              "displayName": "G-Maps link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Kategorija",
+              "displayName": "Kategorija",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1312,
+        -32
+      ],
+      "id": "ecda7d4b-dff4-4a03-81c3-0ad68055aec7",
+      "name": "update sheet",
+      "executeOnce": false,
+      "retryOnFail": true,
+      "alwaysOutputData": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.grad }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "Ti si AI asistent koji generiše lokacije.  Za dati grad, generiši listu od TAČNO 10 različitih četvrti ili oblasti.  PRAVILA: - Samo četvrti, oblasti, i komercijalne zone - NE mostovi, muzeji, ulice, spomenici, stanice - Svaka lokacija u formatu: [naziv], [grad] - BEZ numeracija, BEZ crtice između naziva i grada  PRIMJER: Dubai Marina, Dubai Downtown Dubai, Dubai Jumeirah, Dubai Deira, Dubai Business Bay, Dubai Palm Jumeirah, Dubai JBR, Dubai Al Barsha, Dubai Dubai Hills, Dubai Bur Dubai, Dubai  Svaka lokacija treba biti u novom redu."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        -560,
+        -48
+      ],
+      "id": "7d9de296-cfac-4926-8bec-7cef5643f893",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        96
+      ],
+      "id": "259f8d43-6971-4a7f-a5d3-a39958aae088",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "YOUR_GROQ_CREDENTIAL_ID",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {
+          "numberOfItems": 10,
+          "separator": "\\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserItemList",
+      "typeVersion": 1,
+      "position": [
+        -416,
+        96
+      ],
+      "id": "45c14a94-711c-4ce6-b38f-524f1d796551",
+      "name": "Item List Output Parser"
+    },
+    {
+      "parameters": {
+        "options": {
+          "reset": false
+        }
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -32,
+        -48
+      ],
+      "id": "99e00f7b-fc73-485e-aee3-be532f1ba0ec",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "text",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -208,
+        -48
+      ],
+      "id": "e39d469d-addb-4e13-ad49-fba414b4839f",
+      "name": "Split Out"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "web scraping": {
+      "main": [
+        [
+          {
+            "node": "analiza podataka",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "google maps scraping": {
+      "main": [
+        [
+          {
+            "node": "if-1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "if-1": {
+      "main": [
+        [
+          {
+            "node": "if-2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "update sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "if-2": {
+      "main": [
+        [
+          {
+            "node": "update sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "web scraping",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "forma": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "analiza podataka": {
+      "main": [
+        [
+          {
+            "node": "update sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "update sheet": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Item List Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "google maps scraping",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "85ddf9dc-fb63-46ea-9aec-6e1b8f9644d6",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "YOUR_N8N_INSTANCE_ID"
+  },
+  "id": "YOUR_WORKFLOW_ID",
+  "tags": []
+}
